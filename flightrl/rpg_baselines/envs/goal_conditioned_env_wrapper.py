@@ -27,8 +27,8 @@ class GoalConditionedEnvWrapper(gym.Env):
         self.goal = np.zeros(self.num_obs, dtype=np.float32)
         # need to find subgoal space based on observation
         self._subgoal_space = gym.spaces.Box(
-            np.ones(self.num_obs) * -np.Inf,
-            np.ones(self.num_obs) * np.Inf,
+            np.ones(self.num_obs) * -1,
+            np.ones(self.num_obs) * 1,
             dtype=np.float32)
 
         self.reward = np.float32(0.0)
