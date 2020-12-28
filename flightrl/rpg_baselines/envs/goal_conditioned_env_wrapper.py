@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import gym
 import numpy as np
-import time
 
 
 class GoalConditionedEnvWrapper(gym.Env):
+    """
+    goal conditioned environment for quadrotors.
+    """
     def __init__(self, env):
         self.env = env
         self.env.init()
@@ -21,8 +23,9 @@ class GoalConditionedEnvWrapper(gym.Env):
             high=np.ones(self.num_act) * 1.,
             dtype=np.float32)
         self.observation = np.zeros(self.num_obs, dtype=np.float32)
+        # in this env, the goal dim is the same as the obs dim
         self.goal = np.zeros(self.num_obs, dtype=np.float32)
-
+        # need to find subgoal space based on observation
         self._subgoal_space = gym.spaces.Box(
             np.ones(self.num_obs) * -np.Inf,
             np.ones(self.num_obs) * np.Inf,
@@ -40,10 +43,13 @@ class GoalConditionedEnvWrapper(gym.Env):
 
     def step(self, action):
         self.reward = self.env.step(action, self.observation)
+        self.goal()
         terminal_reward = 0.0
         self.done = self.env.isTerminalState(terminal_reward)
+
         self.obs_dict = {'observation': self.observation.copy(),
-                         'desired_goal': self.goal}
+                         'desired_goal': self.goal.copy()}
+
         return self.obs_dict, self.reward, \
             self.done, [dict(reward_run=self.reward, reward_ctrl=0.0)]
 
@@ -51,8 +57,9 @@ class GoalConditionedEnvWrapper(gym.Env):
         # return dictionary
         self.reward = 0.0
         self.env.reset(self.observation)
+        self.goal()
         self.obs_dict = {'observation': self.observation.copy(),
-                         'desired_goal': self.goal}
+                         'desired_goal': self.goal.copy()}
         return self.obs_dict
 
     def reset_and_update_info(self):
@@ -63,6 +70,7 @@ class GoalConditionedEnvWrapper(gym.Env):
         return self.observation
 
     def goal(self):
+        self.env.getGoal(self.goal)
         return self.goal
 
     def close(self):
@@ -97,6 +105,10 @@ class GoalConditionedEnvWrapper(gym.Env):
     @property
     def observation_space(self):
         return self._observation_space
+
+    @property
+    def subgoal_space(self):
+        return self._subgoal_space
 
     @property
     def action_space(self):

@@ -1,12 +1,12 @@
-#include "flightlib/envs/quadrotor_env/quadrotor_env.hpp"
+#include "flightlib/envs/quadrotor_env/quadrotor_goal_conditioned_env.hpp"
 
 namespace flightlib {
 
-QuadrotorEnv::QuadrotorEnv()
-  : QuadrotorEnv(getenv("FLIGHTMARE_PATH") +
+QuadrotorGoalConditionedEnv::QuadrotorGoalConditionedEnv()
+  : QuadrotorGoalConditionedEnv(getenv("FLIGHTMARE_PATH") +
                  std::string("/flightlib/configs/quadrotor_env.yaml")) {}
 
-QuadrotorEnv::QuadrotorEnv(const std::string &cfg_path)
+QuadrotorGoalConditionedEnv::QuadrotorGoalConditionedEnv(const std::string &cfg_path)
   : EnvBase(),
     pos_coeff_(0.0),
     ori_coeff_(0.0),
@@ -42,9 +42,9 @@ QuadrotorEnv::QuadrotorEnv(const std::string &cfg_path)
   loadParam(cfg_);
 }
 
-QuadrotorEnv::~QuadrotorEnv() {}
+QuadrotorGoalConditionedEnv::~QuadrotorGoalConditionedEnv() {}
 
-bool QuadrotorEnv::reset(Ref<Vector<>> obs, const bool random) {
+bool QuadrotorGoalConditionedEnv::reset(Ref<Vector<>> obs, const bool random) {
   quad_state_.setZero();
   quad_act_.setZero();
 
@@ -79,7 +79,7 @@ bool QuadrotorEnv::reset(Ref<Vector<>> obs, const bool random) {
   return true;
 }
 
-bool QuadrotorEnv::getObs(Ref<Vector<>> obs) {
+bool QuadrotorGoalConditionedEnv::getObs(Ref<Vector<>> obs) {
   quadrotor_ptr_->getState(&quad_state_);
 
   // convert quaternion to euler angle
@@ -91,12 +91,18 @@ bool QuadrotorEnv::getObs(Ref<Vector<>> obs) {
   return true;
 }
 
-Scalar QuadrotorEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs) {
+bool QuadrotorGoalConditionedEnv::getGoal(Ref<Vector<>> goal) {
+    goal.segment<quadenv::kNGoal>(quadenv::kGoal) = goal_state_;
+    return true;
+
+}
+
+Scalar QuadrotorGoalConditionedEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs) {
   quad_act_ = act.cwiseProduct(act_std_) + act_mean_;
   cmd_.t += sim_dt_;
   cmd_.thrusts = quad_act_;
 
-  // simulate quadrotor
+  // simulate quadrotor (take the actual action in the env)
   quadrotor_ptr_->run(cmd_, sim_dt_);
 
   // update observations
@@ -105,6 +111,7 @@ Scalar QuadrotorEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs) {
   Matrix<3, 3> rot = quad_state_.q().toRotationMatrix();
 
   // ---------------------- reward function design
+  // based on difference of goal state vs. current state.
   // - position tracking
   Scalar pos_reward =
     pos_coeff_ * (quad_obs_.segment<quadenv::kNPos>(quadenv::kPos) -
@@ -132,13 +139,13 @@ Scalar QuadrotorEnv::step(const Ref<Vector<>> act, Ref<Vector<>> obs) {
   Scalar total_reward =
     pos_reward + ori_reward + lin_vel_reward + ang_vel_reward + act_reward;
 
-  // survival reward
+  // survival reward for not being in a terminal state
   total_reward += 0.1;
 
   return total_reward;
 }
 
-bool QuadrotorEnv::isTerminalState(Scalar &reward) {
+bool QuadrotorGoalConditionedEnv::isTerminalState(Scalar &reward) {
   if (quad_state_.x(QS::POSZ) <= 0.02) {
     reward = -0.02;
     return true;
@@ -147,7 +154,7 @@ bool QuadrotorEnv::isTerminalState(Scalar &reward) {
   return false;
 }
 
-bool QuadrotorEnv::loadParam(const YAML::Node &cfg) {
+bool QuadrotorGoalConditionedEnv::loadParam(const YAML::Node &cfg) {
   if (cfg["quadrotor_env"]) {
     sim_dt_ = cfg["quadrotor_env"]["sim_dt"].as<Scalar>();
     max_t_ = cfg["quadrotor_env"]["max_t"].as<Scalar>();
@@ -157,6 +164,7 @@ bool QuadrotorEnv::loadParam(const YAML::Node &cfg) {
 
   if (cfg["rl"]) {
     // load reinforcement learning related parameters
+    // (for reward function)
     pos_coeff_ = cfg["rl"]["pos_coeff"].as<Scalar>();
     ori_coeff_ = cfg["rl"]["ori_coeff"].as<Scalar>();
     lin_vel_coeff_ = cfg["rl"]["lin_vel_coeff"].as<Scalar>();
@@ -168,7 +176,7 @@ bool QuadrotorEnv::loadParam(const YAML::Node &cfg) {
   return true;
 }
 
-bool QuadrotorEnv::getAct(Ref<Vector<>> act) const {
+bool QuadrotorGoalConditionedEnv::getAct(Ref<Vector<>> act) const {
   if (cmd_.t >= 0.0 && quad_act_.allFinite()) {
     act = quad_act_;
     return true;
@@ -176,19 +184,19 @@ bool QuadrotorEnv::getAct(Ref<Vector<>> act) const {
   return false;
 }
 
-bool QuadrotorEnv::getAct(Command *const cmd) const {
+bool QuadrotorGoalConditionedEnv::getAct(Command *const cmd) const {
   if (!cmd_.valid()) return false;
   *cmd = cmd_;
   return true;
 }
 
-void QuadrotorEnv::addObjectsToUnity(std::shared_ptr<UnityBridge> bridge) {
+void QuadrotorGoalConditionedEnv::addObjectsToUnity(std::shared_ptr<UnityBridge> bridge) {
   bridge->addQuadrotor(quadrotor_ptr_);
 }
 
-std::ostream &operator<<(std::ostream &os, const QuadrotorEnv &quad_env) {
+std::ostream &operator<<(std::ostream &os, const QuadrotorGoalConditionedEnv &quad_env) {
   os.precision(3);
-  os << "Quadrotor Environment:\n"
+  os << "Quadrotor Goal Conditioned Environment:\n"
      << "obs dim =            [" << quad_env.obs_dim_ << "]\n"
      << "act dim =            [" << quad_env.act_dim_ << "]\n"
      << "sim dt =             [" << quad_env.sim_dt_ << "]\n"
