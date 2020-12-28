@@ -18,7 +18,6 @@ import torch
 import tensorflow as tf
 
 
-from hiro_robot_envs.envs import create_maze_env, AntEnvWithGoal
 
 import pfrl
 from pfrl import utils
@@ -26,9 +25,9 @@ from pfrl import experiments
 from pfrl.agents.hrl.hiro_agent import HIROAgent
 
 from rpg_baselines.envs import vec_env_wrapper as wrapper
-import rpg_baselines.common.util as U
+# import rpg_baselines.common.util as U
 #
-from flightgym import QuadrotorEnv_v1
+from flightgym import QuadrotorEnv_v1, QuadrotorGoalConditionedEnv_v1
 
 
 def configure_random_seed(seed, env=None):
@@ -165,7 +164,7 @@ def main():
         # env_seed = np.random.randint(0, 2**32 - 1) if not test else process_seed
         utils.set_random_seed(env_seed)
         # create the anv environment with goal
-        env = wrapper.FlightEnvVec(QuadrotorEnv_v1(
+        env = wrapper.FlightEnvVec(QuadrotorGoalConditionedEnv_v1(
         dump(cfg, Dumper=RoundTripDumper), False))
         env.seed(env_seed)
 
