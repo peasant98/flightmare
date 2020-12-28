@@ -13,6 +13,7 @@
 namespace py = pybind11;
 using namespace flightlib;
 
+// wrappers from cpp to py
 PYBIND11_MODULE(flightgym, m) {
   py::class_<VecEnv<QuadrotorEnv>>(m, "QuadrotorEnv_v1")
     .def(py::init<>())
